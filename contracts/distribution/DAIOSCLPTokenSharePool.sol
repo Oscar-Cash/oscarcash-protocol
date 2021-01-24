@@ -19,7 +19,7 @@ contract DAIOSCLPTokenSharePool is
     uint256 public constant REFERRAL_REBATE_PERCENT = 1;
     uint256 public constant RISK_FUND_PERCENT = 2;
 
-    uint256 public initreward = 93750 * 10**18; // 184,799.95 Shares
+    uint256 public initreward = 86250 * 10**18; // 184,799.95 Shares
     uint256 public starttime; // starttime TBD
     uint256 public periodFinish = 0;
     uint256 public rewardRate = 0;
