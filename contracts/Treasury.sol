@@ -9,7 +9,6 @@ import './interfaces/IOracle.sol';
 import './interfaces/IBoardroom.sol';
 import './interfaces/IOscarAsset.sol';
 import './interfaces/ISimpleERCFund.sol';
-import './interfaces/IGasDiscount.sol';
 import './lib/Babylonian.sol';
 import './lib/FixedPoint.sol';
 import './lib/Safe112.sol';
@@ -21,7 +20,7 @@ import './utils/ContractGuard.sol';
  * @title Oscar Cash Treasury contract
  * @notice Monetary policy logic to adjust supplies of oscar cash assets
  */
-contract Treasury is ContractGuard, Epoch, IGasDiscount {
+contract Treasury is ContractGuard, Epoch {
     using FixedPoint for *;
     using SafeERC20 for IERC20;
     using Address for address;
@@ -62,7 +61,7 @@ contract Treasury is ContractGuard, Epoch, IGasDiscount {
         address _boardroom,
         address _fund,
         uint256 _startTime
-    ) public Epoch(1 days, _startTime, 0) { //1 days todo
+    ) public Epoch(1 days, _startTime, 0) {
         cash = _cash;
         bond = _bond;
         share = _share;
@@ -177,19 +176,8 @@ contract Treasury is ContractGuard, Epoch, IGasDiscount {
     }
 
     // ******************* buyBonds **********************//
-    function buyBondsWithDiscount(uint256 amount, uint256 targetPrice ,address gasSponsor, uint256 flag) 
-        external 
-        discountGas(gasSponsor, flag)
-    {
-        buyBondsInternal(amount, targetPrice);
-    }
-
-    function buyBonds(uint256 amount, uint256 targetPrice) external {
-        buyBondsInternal(amount, targetPrice);
-    }
-   
-    function buyBondsInternal(uint256 amount, uint256 targetPrice)
-        internal
+    function buyBonds(uint256 amount, uint256 targetPrice)
+        external
         onlyOneBlock
         checkMigration
         checkStartTime
@@ -214,19 +202,8 @@ contract Treasury is ContractGuard, Epoch, IGasDiscount {
     }
 
     // ******************* redeemBonds **********************//
-    function redeemBondsWithDiscount(uint256 amount, uint256 targetPrice, address gasSponsor, uint256 flag) 
-        external 
-        discountGas(gasSponsor, flag)
-    {
-        redeemBondsInternal(amount, targetPrice);
-    }
-
-    function redeemBonds(uint256 amount, uint256 targetPrice) external {
-        redeemBondsInternal(amount, targetPrice);
-    }
-
-    function redeemBondsInternal(uint256 amount, uint256 targetPrice)
-        internal
+    function redeemBonds(uint256 amount, uint256 targetPrice)
+        external
         onlyOneBlock
         checkMigration
         checkStartTime
@@ -257,19 +234,7 @@ contract Treasury is ContractGuard, Epoch, IGasDiscount {
     }
 
     // ******************* allocateSeigniorage **********************//
-    function allocateSeigniorageWithDiscount(address gasSponsor, uint256 flag) 
-        external 
-        discountGas(gasSponsor, flag)
-    {
-        allocateSeigniorageInternal();
-    }
-
-    function allocateSeigniorage() external {
-        allocateSeigniorageInternal();
-    }
-
-    function allocateSeigniorageInternal()
-        internal
+    function allocateSeigniorage() external 
         onlyOneBlock
         checkMigration
         checkStartTime

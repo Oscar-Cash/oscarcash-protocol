@@ -8,16 +8,41 @@ import '@openzeppelin/contracts/token/ERC20/SafeERC20.sol';
 import '../interfaces/IRewardDistributionRecipient.sol';
 import '../interfaces/IReferral.sol';
 
-import '../token/LPTokenWrapper.sol';
+contract HTWrapper {
+    using SafeMath for uint256;
+    using SafeERC20 for IERC20;
 
-contract DAIOSSLPTokenSharePool is
-    LPTokenWrapper,
-    IRewardDistributionRecipient
-{
-    IERC20 public oscarShare;
-    uint256 public constant DURATION = 365 days;
+    uint256 private _totalSupply;
+    mapping(address => uint256) private _balances;
+
+    function totalSupply() public view returns (uint256) {
+        return _totalSupply;
+    }
+
+    function balanceOf(address account) public view returns (uint256) {
+        return _balances[account];
+    }
+
+    function stake(uint256 amount) public virtual payable{
+        _totalSupply = _totalSupply.add(amount);
+        _balances[msg.sender] = _balances[msg.sender].add(msg.value);
+    }
+
+    function withdraw(uint256 amount) public virtual {
+        _totalSupply = _totalSupply.sub(amount);
+        _balances[msg.sender] = _balances[msg.sender].sub(amount);
+        address payable userAddr = msg.sender;
+        userAddr.transfer(amount);
+    }
+}
+
+contract OSCHTPool is HTWrapper, IRewardDistributionRecipient {
+
+    IERC20 public oscarCash;
+    uint256 public constant DURATION = 5 days;
     uint256 public constant REFERRAL_REBATE_PERCENT = 1;
-    uint256 public constant RISK_FUND_PERCENT = 2;
+    uint256 public constant RISK_FUND_PERCENT = 3;
+    uint256 public constant DEV_FUND_PERCENT = 2;
 
     uint256 public starttime;
     uint256 public periodFinish = 0;
@@ -26,34 +51,34 @@ contract DAIOSSLPTokenSharePool is
     uint256 public rewardPerTokenStored;
 
     address public riskFundAddress;
-
+    address public devFundAddress;
+    
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
+    mapping(address => uint256) public deposits;
 
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
     event RewardPaid(address indexed user, uint256 reward);
-    event FundRewardPaid(address indexed user, uint256 reward);
+    event RiskFundRewardPaid(address indexed user, uint256 reward);
+    event DevFundRewardPaid(address indexed user, uint256 reward);
     event ReferralRewardPaid(address indexed user, address indexed referral, uint256 reward);
 
     constructor(
-        address oscarShare_,
-        address lptoken_,
+        address oscarCash_,
         address riskFundAddress_,
+        address devFundAddress_,
         uint256 starttime_
     ) public {
-        oscarShare = IERC20(oscarShare_);
-        lpt = IERC20(lptoken_);
+        oscarCash = IERC20(oscarCash_);
         riskFundAddress = riskFundAddress_;
+        devFundAddress = devFundAddress_;
         starttime = starttime_;
     }
 
     modifier checkStart() {
-        require(
-            block.timestamp >= starttime,
-            'LPTokenSharePool(DAI-OSS): not start'
-        );
+        require(block.timestamp >= starttime, 'OSCHTPool: not start');
         _;
     }
 
@@ -93,20 +118,27 @@ contract DAIOSSLPTokenSharePool is
                 .add(rewards[account]);
     }
 
-    function stakeWithReferrer(uint256 amount, address referrer) external {
+    function stakeWithReferrer(uint256 amount, address referrer) 
+        external 
+        payable 
+    {
         stake(amount);
         if (rewardReferral != address(0) && referrer != address(0)) {
             IReferral(rewardReferral).setReferrer(msg.sender, referrer);
         }
     }
-
+    
     function stake(uint256 amount)
         public
+        payable
         override
         updateReward(msg.sender)
         checkStart
     {
-        require(amount > 0, 'LPTokenSharePool(DAI-OSS): Cannot stake 0');
+        require(amount > 0, 'OSCHTPool: Cannot stake 0');
+        require(amount == msg.value, 'OSCHTPool: Amount error');
+        uint256 newDeposit = deposits[msg.sender].add(amount);
+        deposits[msg.sender] = newDeposit;
         super.stake(amount);
         emit Staked(msg.sender, amount);
     }
@@ -117,7 +149,8 @@ contract DAIOSSLPTokenSharePool is
         updateReward(msg.sender)
         checkStart
     {
-        require(amount > 0, 'LPTokenSharePool(DAI-OSS): Cannot withdraw 0');
+        require(amount > 0, 'OSCHTPool: Cannot withdraw 0');
+        deposits[msg.sender] = deposits[msg.sender].sub(amount);
         super.withdraw(amount);
         emit Withdrawn(msg.sender, amount);
     }
@@ -131,27 +164,34 @@ contract DAIOSSLPTokenSharePool is
         uint256 reward = earned(msg.sender);
         if (reward > 0) {
             rewards[msg.sender] = 0;
-            
-            uint256 fundPaid = reward.mul(RISK_FUND_PERCENT).div(100);// 2%
+
+            uint256 fundPaid = reward.mul(RISK_FUND_PERCENT).div(100);// 3%
+            uint256 devPaid = reward.mul(DEV_FUND_PERCENT).div(100);// 2%
             uint256 rebate = reward.mul(REFERRAL_REBATE_PERCENT).div(100); // 1%
-            uint256 actualPaid =reward;
+            uint256 actualPaid = reward;
 
             if(riskFundAddress != address(0) && fundPaid > 0){
                actualPaid = actualPaid.sub(fundPaid);
-               oscarShare.safeTransfer(riskFundAddress, fundPaid);
-               emit FundRewardPaid(riskFundAddress, fundPaid);     
+               oscarCash.safeTransfer(riskFundAddress, fundPaid);
+               emit RiskFundRewardPaid(riskFundAddress, fundPaid);     
+            }
+
+            if(devFundAddress != address(0) && devPaid > 0){
+               actualPaid = actualPaid.sub(devPaid);
+               oscarCash.safeTransfer(devFundAddress, devPaid);
+               emit DevFundRewardPaid(devFundAddress, devPaid);     
             }
 
             if (rewardReferral != address(0) && rebate > 0) {
                 address referrer = IReferral(rewardReferral).getReferrer(msg.sender);
                 if(referrer != address(0)){
                     actualPaid = actualPaid.sub(rebate);
-                    oscarShare.safeTransfer(referrer, rebate);
+                    oscarCash.safeTransfer(referrer, rebate);
                     emit ReferralRewardPaid(msg.sender, referrer, rebate);
                 }
             }
 
-            oscarShare.safeTransfer(msg.sender, actualPaid);
+            oscarCash.safeTransfer(msg.sender, actualPaid);
             emit RewardPaid(msg.sender, actualPaid);
         }
     }

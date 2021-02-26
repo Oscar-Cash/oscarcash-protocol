@@ -8,46 +8,82 @@ import '@openzeppelin/contracts/token/ERC20/SafeERC20.sol';
 import '../interfaces/IRewardDistributionRecipient.sol';
 import '../interfaces/IReferral.sol';
 
-import '../token/LPTokenWrapper.sol';
+contract HBTCWrapper {
+    using SafeMath for uint256;
+    using SafeERC20 for IERC20;
 
-contract DAIOSCLPTokenSharePool is
-    LPTokenWrapper,
-    IRewardDistributionRecipient
-{
-    IERC20 public oscarShare;
-    uint256 public constant DURATION = 30 days;
+    IERC20 public hbtc;
+
+    uint256 private _totalSupply;
+    mapping(address => uint256) private _balances;
+
+    function totalSupply() public view returns (uint256) {
+        return _totalSupply;
+    }
+
+    function balanceOf(address account) public view returns (uint256) {
+        return _balances[account];
+    }
+
+    function stake(uint256 amount) public virtual {
+        _totalSupply = _totalSupply.add(amount);
+        _balances[msg.sender] = _balances[msg.sender].add(amount);
+        hbtc.safeTransferFrom(msg.sender, address(this), amount);
+    }
+
+    function withdraw(uint256 amount) public virtual {
+        _totalSupply = _totalSupply.sub(amount);
+        _balances[msg.sender] = _balances[msg.sender].sub(amount);
+        hbtc.safeTransfer(msg.sender, amount);
+    }
+}
+
+contract OSCHBTCPool is HBTCWrapper, IRewardDistributionRecipient {
+
+    IERC20 public oscarCash;
+    uint256 public constant DURATION = 5 days;
     uint256 public constant REFERRAL_REBATE_PERCENT = 1;
-    uint256 public constant RISK_FUND_PERCENT = 2;
+    uint256 public constant RISK_FUND_PERCENT = 3;
+    uint256 public constant DEV_FUND_PERCENT = 2;
 
-    uint256 public initreward = 86250 * 10**18; // 184,799.95 Shares
-    uint256 public starttime; // starttime TBD
+    uint256 public starttime;
     uint256 public periodFinish = 0;
     uint256 public rewardRate = 0;
     uint256 public lastUpdateTime;
     uint256 public rewardPerTokenStored;
 
     address public riskFundAddress;
+    address public devFundAddress;
 
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
+    mapping(address => uint256) public deposits;
 
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
     event RewardPaid(address indexed user, uint256 reward);
-    event FundRewardPaid(address indexed user, uint256 reward);
+    event RiskFundRewardPaid(address indexed user, uint256 reward);
+    event DevFundRewardPaid(address indexed user, uint256 reward);
     event ReferralRewardPaid(address indexed user, address indexed referral, uint256 reward);
 
-    constructor(
-        address oscarShare_,
-        address lptoken_,
+    constructor( 
+        address oscarCash_, 
+        address hbtc_, 
         address riskFundAddress_,
-        uint256 starttime_
+        address devFundAddress_,
+        uint256 starttime_ 
     ) public {
-        oscarShare = IERC20(oscarShare_);
-        lpt = IERC20(lptoken_);
+        oscarCash = IERC20(oscarCash_);
+        hbtc = IERC20(hbtc_);
         riskFundAddress = riskFundAddress_;
+        devFundAddress = devFundAddress_;
         starttime = starttime_;
+    }
+
+    modifier checkStart() {
+        require(block.timestamp >= starttime, 'OSCHBTCPool: not start');
+        _;
     }
 
     modifier updateReward(address account) {
@@ -92,27 +128,29 @@ contract DAIOSCLPTokenSharePool is
             IReferral(rewardReferral).setReferrer(msg.sender, referrer);
         }
     }
-
-    function stake(uint256 amount)
-        public
-        override
-        updateReward(msg.sender)
-        checkhalve
-        checkStart
+    
+    function stake(uint256 amount) 
+        public 
+        override 
+        updateReward(msg.sender) 
+        checkStart 
     {
-        require(amount > 0, 'LPTokenSharePool(DAI-OSC): Cannot stake 0');
+        require(amount > 0, 'OSCHBTCPool: Cannot stake 0');
+        uint256 newDeposit = deposits[msg.sender].add(amount);
+        
+        deposits[msg.sender] = newDeposit;
         super.stake(amount);
         emit Staked(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount)
-        public
-        override
-        updateReward(msg.sender)
-        checkhalve
-        checkStart
+    function withdraw(uint256 amount) 
+        public 
+        override 
+        updateReward(msg.sender) 
+        checkStart 
     {
-        require(amount > 0, 'LPTokenSharePool(DAI-OSC): Cannot withdraw 0');
+        require(amount > 0, 'OSCHBTCPool: Cannot withdraw 0');
+        deposits[msg.sender] = deposits[msg.sender].sub(amount);
         super.withdraw(amount);
         emit Withdrawn(msg.sender, amount);
     }
@@ -122,56 +160,47 @@ contract DAIOSCLPTokenSharePool is
         getReward();
     }
 
-    function getReward() public updateReward(msg.sender) checkhalve checkStart {
+    function getReward() public updateReward(msg.sender) checkStart {
         uint256 reward = earned(msg.sender);
         if (reward > 0) {
             rewards[msg.sender] = 0;
 
-            uint256 fundPaid = reward.mul(RISK_FUND_PERCENT).div(100);// 2%
+            uint256 fundPaid = reward.mul(RISK_FUND_PERCENT).div(100);// 3%
+            uint256 devPaid = reward.mul(DEV_FUND_PERCENT).div(100);// 2%
             uint256 rebate = reward.mul(REFERRAL_REBATE_PERCENT).div(100); // 1%
-            uint256 actualPaid =reward;
+            uint256 actualPaid = reward;
 
             if(riskFundAddress != address(0) && fundPaid > 0){
                actualPaid = actualPaid.sub(fundPaid);
-               oscarShare.safeTransfer(riskFundAddress, fundPaid);
-               emit FundRewardPaid(riskFundAddress, fundPaid);     
+               oscarCash.safeTransfer(riskFundAddress, fundPaid);
+               emit RiskFundRewardPaid(riskFundAddress, fundPaid);     
+            }
+
+            if(devFundAddress != address(0) && devPaid > 0){
+               actualPaid = actualPaid.sub(devPaid);
+               oscarCash.safeTransfer(devFundAddress, devPaid);
+               emit DevFundRewardPaid(devFundAddress, devPaid);     
             }
 
             if (rewardReferral != address(0) && rebate > 0) {
                 address referrer = IReferral(rewardReferral).getReferrer(msg.sender);
                 if(referrer != address(0)){
                     actualPaid = actualPaid.sub(rebate);
-                    oscarShare.safeTransfer(referrer, rebate);
+                    oscarCash.safeTransfer(referrer, rebate);
                     emit ReferralRewardPaid(msg.sender, referrer, rebate);
                 }
             }
 
-            oscarShare.safeTransfer(msg.sender, actualPaid);
+            oscarCash.safeTransfer(msg.sender, actualPaid);
             emit RewardPaid(msg.sender, actualPaid);
         }
     }
 
-    modifier checkhalve() {
-        if (block.timestamp >= periodFinish) {
-            initreward = initreward.mul(75).div(100);
-
-            rewardRate = initreward.div(DURATION);
-            periodFinish = block.timestamp.add(DURATION);
-            emit RewardAdded(initreward);
-        }
-        _;
-    }
-
-    modifier checkStart() {
-        require(block.timestamp >= starttime, 'LPTokenSharePool(DAI-OSC): not start');
-        _;
-    }
-
-    function notifyRewardAmount(uint256 reward)
-        external
-        override
-        onlyRewardDistribution
-        updateReward(address(0))
+    function notifyRewardAmount(uint256 reward) 
+        external 
+        override 
+        onlyRewardDistribution 
+        updateReward(address(0)) 
     {
         if (block.timestamp > starttime) {
             if (block.timestamp >= periodFinish) {
@@ -185,7 +214,7 @@ contract DAIOSCLPTokenSharePool is
             periodFinish = block.timestamp.add(DURATION);
             emit RewardAdded(reward);
         } else {
-            rewardRate = initreward.div(DURATION);
+            rewardRate = reward.div(DURATION);
             lastUpdateTime = starttime;
             periodFinish = starttime.add(DURATION);
             emit RewardAdded(reward);

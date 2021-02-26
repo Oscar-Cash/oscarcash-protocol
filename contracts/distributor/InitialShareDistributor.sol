@@ -14,27 +14,27 @@ contract InitialShareDistributor is IDistributor {
     bool public once = true;
 
     IERC20 public share;
-    IRewardDistributionRecipient public daioscLPPool;
-    uint256 public daioscInitialBalance;
-    IRewardDistributionRecipient public daiossLPPool;
-    uint256 public daiossInitialBalance;
+    IRewardDistributionRecipient public usdtoscLPPool;
+    uint256 public usdtoscInitialBalance;
+    IRewardDistributionRecipient public usdtossLPPool;
+    uint256 public usdtossInitialBalance;
     IRewardDistributionRecipient public osbossPool;
     uint256 public osbossInitialBalance;
 
     constructor(
         IERC20 _share,
-        IRewardDistributionRecipient _daioscLPPool,
-        uint256 _daioscInitialBalance,
-        IRewardDistributionRecipient _daiossLPPool,
-        uint256 _daiossInitialBalance,
+        IRewardDistributionRecipient _usdtoscLPPool,
+        uint256 _usdtoscInitialBalance,
+        IRewardDistributionRecipient _usdtossLPPool,
+        uint256 _usdtossInitialBalance,
         IRewardDistributionRecipient _osbossPool,
         uint256 _osbossInitialBalance
     ) public {
         share = _share;
-        daioscLPPool = _daioscLPPool;
-        daioscInitialBalance = _daioscInitialBalance;
-        daiossLPPool = _daiossLPPool;
-        daiossInitialBalance = _daiossInitialBalance;
+        usdtoscLPPool = _usdtoscLPPool;
+        usdtoscInitialBalance = _usdtoscInitialBalance;
+        usdtossLPPool = _usdtossLPPool;
+        usdtossInitialBalance = _usdtossInitialBalance;
         osbossPool =  _osbossPool;
         osbossInitialBalance = _osbossInitialBalance;
     }
@@ -45,13 +45,13 @@ contract InitialShareDistributor is IDistributor {
             'InitialShareDistributor: you cannot run this function twice'
         );
 
-        share.transfer(address(daioscLPPool), daioscInitialBalance);
-        daioscLPPool.notifyRewardAmount(daioscInitialBalance);
-        emit Distributed(address(daioscLPPool), daioscInitialBalance);
+        share.transfer(address(usdtoscLPPool), usdtoscInitialBalance);
+        usdtoscLPPool.notifyRewardAmount(usdtoscInitialBalance);
+        emit Distributed(address(usdtoscLPPool), usdtoscInitialBalance);
 
-        share.transfer(address(daiossLPPool), daiossInitialBalance);
-        daiossLPPool.notifyRewardAmount(daiossInitialBalance);
-        emit Distributed(address(daiossLPPool), daiossInitialBalance);
+        share.transfer(address(usdtossLPPool), usdtossInitialBalance);
+        usdtossLPPool.notifyRewardAmount(usdtossInitialBalance);
+        emit Distributed(address(usdtossLPPool), usdtossInitialBalance);
 
         share.transfer(address(osbossPool), osbossInitialBalance);
         osbossPool.notifyRewardAmount(osbossInitialBalance);

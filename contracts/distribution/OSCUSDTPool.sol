@@ -8,11 +8,11 @@ import '@openzeppelin/contracts/token/ERC20/SafeERC20.sol';
 import '../interfaces/IRewardDistributionRecipient.sol';
 import '../interfaces/IReferral.sol';
 
-contract YFIWrapper {
+contract USDTWrapper {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
-    IERC20 public yfi;
+    IERC20 public usdt;
 
     uint256 private _totalSupply;
     mapping(address => uint256) private _balances;
@@ -28,22 +28,23 @@ contract YFIWrapper {
     function stake(uint256 amount) public virtual {
         _totalSupply = _totalSupply.add(amount);
         _balances[msg.sender] = _balances[msg.sender].add(amount);
-        yfi.safeTransferFrom(msg.sender, address(this), amount);
+        usdt.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function withdraw(uint256 amount) public virtual {
         _totalSupply = _totalSupply.sub(amount);
         _balances[msg.sender] = _balances[msg.sender].sub(amount);
-        yfi.safeTransfer(msg.sender, amount);
+        usdt.safeTransfer(msg.sender, amount);
     }
 }
 
-contract OSCYFIPool is YFIWrapper, IRewardDistributionRecipient {
-
+contract OSCUSDTPool is USDTWrapper, IRewardDistributionRecipient {
+    
     IERC20 public oscarCash;
     uint256 public constant DURATION = 5 days;
     uint256 public constant REFERRAL_REBATE_PERCENT = 1;
-    uint256 public constant RISK_FUND_PERCENT = 2;
+    uint256 public constant RISK_FUND_PERCENT = 3;
+    uint256 public constant DEV_FUND_PERCENT = 2;
 
     uint256 public starttime;
     uint256 public periodFinish = 0;
@@ -52,6 +53,7 @@ contract OSCYFIPool is YFIWrapper, IRewardDistributionRecipient {
     uint256 public rewardPerTokenStored;
 
     address public riskFundAddress;
+    address public devFundAddress;
 
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
@@ -61,23 +63,26 @@ contract OSCYFIPool is YFIWrapper, IRewardDistributionRecipient {
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
     event RewardPaid(address indexed user, uint256 reward);
-    event FundRewardPaid(address indexed user, uint256 reward);
+    event RiskFundRewardPaid(address indexed user, uint256 reward);
+    event DevFundRewardPaid(address indexed user, uint256 reward);
     event ReferralRewardPaid(address indexed user, address indexed referral, uint256 reward);
 
-    constructor( 
-        address oscarCash_, 
-        address yfi_, 
+    constructor(
+        address oscarCash_,
+        address usdt_,
         address riskFundAddress_,
-        uint256 starttime_ 
+        address devFundAddress_,
+        uint256 starttime_
     ) public {
         oscarCash = IERC20(oscarCash_);
-        yfi = IERC20(yfi_);
+        usdt = IERC20(usdt_);
         riskFundAddress = riskFundAddress_;
+        devFundAddress = devFundAddress_;
         starttime = starttime_;
     }
 
     modifier checkStart() {
-        require(block.timestamp >= starttime, 'OSCYFIPool: not start');
+        require(block.timestamp >= starttime, 'OSCUSDTPool: not start');
         _;
     }
 
@@ -123,28 +128,31 @@ contract OSCYFIPool is YFIWrapper, IRewardDistributionRecipient {
             IReferral(rewardReferral).setReferrer(msg.sender, referrer);
         }
     }
-    
-    function stake(uint256 amount) 
-        public 
-        override 
-        updateReward(msg.sender) 
-        checkStart 
+
+    function stake(uint256 amount)
+        public
+        override
+        updateReward(msg.sender)
+        checkStart
     {
-        require(amount > 0, 'OSCYFIPool: Cannot stake 0');
+        require(amount > 0, 'OSCUSDTPool: Cannot stake 0');
         uint256 newDeposit = deposits[msg.sender].add(amount);
-        
+        require(
+            newDeposit <= 50000e18,
+            'OSCUSDTPool: deposit amount exceeds maximum 50000'
+        );
         deposits[msg.sender] = newDeposit;
         super.stake(amount);
         emit Staked(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount) 
-        public 
-        override 
-        updateReward(msg.sender) 
-        checkStart 
+    function withdraw(uint256 amount)
+        public
+        override
+        updateReward(msg.sender)
+        checkStart
     {
-        require(amount > 0, 'OSCYFIPool: Cannot withdraw 0');
+        require(amount > 0, 'OSCUSDTPool: Cannot withdraw 0');
         deposits[msg.sender] = deposits[msg.sender].sub(amount);
         super.withdraw(amount);
         emit Withdrawn(msg.sender, amount);
@@ -160,14 +168,21 @@ contract OSCYFIPool is YFIWrapper, IRewardDistributionRecipient {
         if (reward > 0) {
             rewards[msg.sender] = 0;
 
-            uint256 fundPaid = reward.mul(RISK_FUND_PERCENT).div(100);// 2%
+            uint256 fundPaid = reward.mul(RISK_FUND_PERCENT).div(100);// 3%
+            uint256 devPaid = reward.mul(DEV_FUND_PERCENT).div(100);// 2%
             uint256 rebate = reward.mul(REFERRAL_REBATE_PERCENT).div(100); // 1%
-            uint256 actualPaid =reward;
+            uint256 actualPaid = reward;
 
             if(riskFundAddress != address(0) && fundPaid > 0){
                actualPaid = actualPaid.sub(fundPaid);
                oscarCash.safeTransfer(riskFundAddress, fundPaid);
-               emit FundRewardPaid(riskFundAddress, fundPaid);     
+               emit RiskFundRewardPaid(riskFundAddress, fundPaid);     
+            }
+
+            if(devFundAddress != address(0) && devPaid > 0){
+               actualPaid = actualPaid.sub(devPaid);
+               oscarCash.safeTransfer(devFundAddress, devPaid);
+               emit DevFundRewardPaid(devFundAddress, devPaid);     
             }
 
             if (rewardReferral != address(0) && rebate > 0) {
@@ -184,11 +199,11 @@ contract OSCYFIPool is YFIWrapper, IRewardDistributionRecipient {
         }
     }
 
-    function notifyRewardAmount(uint256 reward) 
-        external 
-        override 
-        onlyRewardDistribution 
-        updateReward(address(0)) 
+    function notifyRewardAmount(uint256 reward)
+        external
+        override
+        onlyRewardDistribution
+        updateReward(address(0))
     {
         if (block.timestamp > starttime) {
             if (block.timestamp >= periodFinish) {

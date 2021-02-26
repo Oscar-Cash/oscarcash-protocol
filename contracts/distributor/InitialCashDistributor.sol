@@ -1,14 +1,12 @@
 pragma solidity ^0.6.0;
 
-import '../distribution/OSCDAIPool.sol';
-import '../distribution/OSCUSDCPool.sol';
+import '../distribution/OSCHUSDPool.sol';
 import '../distribution/OSCUSDTPool.sol';
-import '../distribution/OSCBACPool.sol';
-import '../distribution/OSCFRAXPool.sol';
-import '../distribution/OSCYFIPool.sol';
-import '../distribution/OSCUNIPool.sol';
-import '../distribution/OSCSUSHIPool.sol';
-import '../distribution/OSCBELPool.sol';
+import '../distribution/OSCHBTCPool.sol';
+import '../distribution/OSCBEEPool.sol';
+import '../distribution/OSCGOFPool.sol';
+import '../distribution/OSCHTPool.sol';
+import '../distribution/OSCMDXPool.sol';
 import '../interfaces/IDistributor.sol';
 
 contract InitialCashDistributor is IDistributor {

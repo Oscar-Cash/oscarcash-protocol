@@ -8,38 +8,12 @@ import '@openzeppelin/contracts/token/ERC20/SafeERC20.sol';
 import '../interfaces/IRewardDistributionRecipient.sol';
 import '../interfaces/IReferral.sol';
 
-contract OSBWrapper {
-    using SafeMath for uint256;
-    using SafeERC20 for IERC20;
+import '../token/LPTokenWrapper.sol';
 
-    IERC20 public osb;
-
-    uint256 private _totalSupply;
-    mapping(address => uint256) private _balances;
-
-    function totalSupply() public view returns (uint256) {
-        return _totalSupply;
-    }
-
-    function balanceOf(address account) public view returns (uint256) {
-        return _balances[account];
-    }
-
-    function stake(uint256 amount) public virtual {
-        _totalSupply = _totalSupply.add(amount);
-        _balances[msg.sender] = _balances[msg.sender].add(amount);
-        osb.safeTransferFrom(msg.sender, address(this), amount);
-    }
-
-    function withdraw(uint256 amount) public virtual {
-        _totalSupply = _totalSupply.sub(amount);
-        _balances[msg.sender] = _balances[msg.sender].sub(amount);
-        osb.safeTransfer(msg.sender, amount);
-    }
-}
-
-contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
-
+contract USDTOSSLPTokenSharePool is
+    LPTokenWrapper,
+    IRewardDistributionRecipient
+{
     IERC20 public oscarShare;
     uint256 public constant DURATION = 365 days;
     uint256 public constant REFERRAL_REBATE_PERCENT = 1;
@@ -54,10 +28,9 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
 
     address public riskFundAddress;
     address public devFundAddress;
-    
+
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
-    mapping(address => uint256) public deposits;
 
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);
@@ -69,20 +42,23 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
 
     constructor(
         address oscarShare_,
-        address osb_,
+        address lptoken_,
         address riskFundAddress_,
         address devFundAddress_,
         uint256 starttime_
     ) public {
         oscarShare = IERC20(oscarShare_);
-        osb = IERC20(osb_);
+        lpt = IERC20(lptoken_);
         riskFundAddress = riskFundAddress_;
         devFundAddress = devFundAddress_;
         starttime = starttime_;
     }
 
     modifier checkStart() {
-        require(block.timestamp >= starttime, 'OSSOSBPool: not start');
+        require(
+            block.timestamp >= starttime,
+            'LPTokenSharePool(USDT-OSS): not start'
+        );
         _;
     }
 
@@ -128,17 +104,14 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
             IReferral(rewardReferral).setReferrer(msg.sender, referrer);
         }
     }
-    
+
     function stake(uint256 amount)
         public
         override
         updateReward(msg.sender)
         checkStart
     {
-        require(amount > 0, 'OSSOSBPool: Cannot stake 0');
-        uint256 newDeposit = deposits[msg.sender].add(amount);
-       
-        deposits[msg.sender] = newDeposit;
+        require(amount > 0, 'LPTokenSharePool(USDT-OSS): Cannot stake 0');
         super.stake(amount);
         emit Staked(msg.sender, amount);
     }
@@ -149,8 +122,7 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
         updateReward(msg.sender)
         checkStart
     {
-        require(amount > 0, 'OSSOSBPool: Cannot withdraw 0');
-        deposits[msg.sender] = deposits[msg.sender].sub(amount);
+        require(amount > 0, 'LPTokenSharePool(USDT-OSS): Cannot withdraw 0');
         super.withdraw(amount);
         emit Withdrawn(msg.sender, amount);
     }
@@ -164,7 +136,7 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
         uint256 reward = earned(msg.sender);
         if (reward > 0) {
             rewards[msg.sender] = 0;
-
+            
             uint256 fundPaid = reward.mul(RISK_FUND_PERCENT).div(100);// 3%
             uint256 devPaid = reward.mul(DEV_FUND_PERCENT).div(100);// 2%
             uint256 rebate = reward.mul(REFERRAL_REBATE_PERCENT).div(100); // 1%

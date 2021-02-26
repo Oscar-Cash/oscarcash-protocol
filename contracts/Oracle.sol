@@ -4,11 +4,10 @@ import '@openzeppelin/contracts/math/SafeMath.sol';
 
 import './lib/Babylonian.sol';
 import './lib/FixedPoint.sol';
-import './lib/UniswapV2Library.sol';
-import './lib/UniswapV2OracleLibrary.sol';
+import './lib/MdexOracleLibrary.sol';
 import './utils/Epoch.sol';
-import './interfaces/IUniswapV2Pair.sol';
-import './interfaces/IUniswapV2Factory.sol';
+import './interfaces/IMdexPair.sol';
+import './interfaces/IMdexFactory.sol';
 
 // fixed window oracle that recomputes the average price for the entire period once every period
 // note that the price average is only guaranteed to be over at least 1 period, but may be over a longer period
@@ -18,10 +17,10 @@ contract Oracle is Epoch {
 
     /* ========== STATE VARIABLES ========== */
 
-    // uniswap
+    // mdexswap
     address public token0;
     address public token1;
-    IUniswapV2Pair public pair;
+    IMdexPair public pair;
 
     // oracle
     uint32 public blockTimestampLast;
@@ -39,8 +38,8 @@ contract Oracle is Epoch {
         uint256 _period,
         uint256 _startTime
     ) public Epoch(_period, _startTime, 0) {
-        IUniswapV2Pair _pair = IUniswapV2Pair(
-            UniswapV2Library.pairFor(_factory, _tokenA, _tokenB)
+        IMdexPair _pair = IMdexPair(
+            IMdexFactory(_factory).pairFor(_tokenA, _tokenB)
         );
         pair = _pair;
         token0 = _pair.token0();
@@ -55,13 +54,13 @@ contract Oracle is Epoch {
 
     /* ========== MUTABLE FUNCTIONS ========== */
 
-    /** @dev Updates 1-day EMA price from Uniswap.  */
+    /** @dev Updates 1-day EMA price from MdexSwap.  */
     function update() external checkEpoch {
         (
             uint256 price0Cumulative,
             uint256 price1Cumulative,
             uint32 blockTimestamp
-        ) = UniswapV2OracleLibrary.currentCumulativePrices(address(pair));
+        ) = MdexOracleLibrary.currentCumulativePrices(address(pair));
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
 
         if (timeElapsed == 0) {
@@ -103,8 +102,8 @@ contract Oracle is Epoch {
         address factory,
         address tokenA,
         address tokenB
-    ) external pure returns (address lpt) {
-        return UniswapV2Library.pairFor(factory, tokenA, tokenB);
+    ) external view returns (address lpt) {
+        return IMdexFactory(factory).pairFor(tokenA, tokenB);
     }
 
     event Updated(uint256 price0CumulativeLast, uint256 price1CumulativeLast);

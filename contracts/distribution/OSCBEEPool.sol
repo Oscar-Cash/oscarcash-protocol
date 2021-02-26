@@ -8,11 +8,11 @@ import '@openzeppelin/contracts/token/ERC20/SafeERC20.sol';
 import '../interfaces/IRewardDistributionRecipient.sol';
 import '../interfaces/IReferral.sol';
 
-contract OSBWrapper {
+contract BEEWrapper {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
-    IERC20 public osb;
+    IERC20 public bee;
 
     uint256 private _totalSupply;
     mapping(address => uint256) private _balances;
@@ -28,20 +28,20 @@ contract OSBWrapper {
     function stake(uint256 amount) public virtual {
         _totalSupply = _totalSupply.add(amount);
         _balances[msg.sender] = _balances[msg.sender].add(amount);
-        osb.safeTransferFrom(msg.sender, address(this), amount);
+        bee.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function withdraw(uint256 amount) public virtual {
         _totalSupply = _totalSupply.sub(amount);
         _balances[msg.sender] = _balances[msg.sender].sub(amount);
-        osb.safeTransfer(msg.sender, amount);
+        bee.safeTransfer(msg.sender, amount);
     }
 }
 
-contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
+contract OSCBEEPool is BEEWrapper, IRewardDistributionRecipient {
 
-    IERC20 public oscarShare;
-    uint256 public constant DURATION = 365 days;
+    IERC20 public oscarCash;
+    uint256 public constant DURATION = 5 days;
     uint256 public constant REFERRAL_REBATE_PERCENT = 1;
     uint256 public constant RISK_FUND_PERCENT = 3;
     uint256 public constant DEV_FUND_PERCENT = 2;
@@ -54,7 +54,7 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
 
     address public riskFundAddress;
     address public devFundAddress;
-    
+
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
     mapping(address => uint256) public deposits;
@@ -67,22 +67,22 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
     event DevFundRewardPaid(address indexed user, uint256 reward);
     event ReferralRewardPaid(address indexed user, address indexed referral, uint256 reward);
 
-    constructor(
-        address oscarShare_,
-        address osb_,
+    constructor( 
+        address oscarCash_, 
+        address bee_, 
         address riskFundAddress_,
         address devFundAddress_,
-        uint256 starttime_
+        uint256 starttime_ 
     ) public {
-        oscarShare = IERC20(oscarShare_);
-        osb = IERC20(osb_);
+        oscarCash = IERC20(oscarCash_);
+        bee = IERC20(bee_);
         riskFundAddress = riskFundAddress_;
         devFundAddress = devFundAddress_;
         starttime = starttime_;
     }
 
     modifier checkStart() {
-        require(block.timestamp >= starttime, 'OSSOSBPool: not start');
+        require(block.timestamp >= starttime, 'OSCBEEPool: not start');
         _;
     }
 
@@ -129,27 +129,27 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
         }
     }
     
-    function stake(uint256 amount)
-        public
-        override
-        updateReward(msg.sender)
-        checkStart
+    function stake(uint256 amount) 
+        public 
+        override 
+        updateReward(msg.sender) 
+        checkStart 
     {
-        require(amount > 0, 'OSSOSBPool: Cannot stake 0');
+        require(amount > 0, 'OSCBEEPool: Cannot stake 0');
         uint256 newDeposit = deposits[msg.sender].add(amount);
-       
+        
         deposits[msg.sender] = newDeposit;
         super.stake(amount);
         emit Staked(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount)
-        public
-        override
-        updateReward(msg.sender)
-        checkStart
+    function withdraw(uint256 amount) 
+        public 
+        override 
+        updateReward(msg.sender) 
+        checkStart 
     {
-        require(amount > 0, 'OSSOSBPool: Cannot withdraw 0');
+        require(amount > 0, 'OSCBEEPool: Cannot withdraw 0');
         deposits[msg.sender] = deposits[msg.sender].sub(amount);
         super.withdraw(amount);
         emit Withdrawn(msg.sender, amount);
@@ -172,13 +172,13 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
 
             if(riskFundAddress != address(0) && fundPaid > 0){
                actualPaid = actualPaid.sub(fundPaid);
-               oscarShare.safeTransfer(riskFundAddress, fundPaid);
+               oscarCash.safeTransfer(riskFundAddress, fundPaid);
                emit RiskFundRewardPaid(riskFundAddress, fundPaid);     
             }
 
             if(devFundAddress != address(0) && devPaid > 0){
                actualPaid = actualPaid.sub(devPaid);
-               oscarShare.safeTransfer(devFundAddress, devPaid);
+               oscarCash.safeTransfer(devFundAddress, devPaid);
                emit DevFundRewardPaid(devFundAddress, devPaid);     
             }
 
@@ -186,21 +186,21 @@ contract OSSOSBPool is OSBWrapper, IRewardDistributionRecipient {
                 address referrer = IReferral(rewardReferral).getReferrer(msg.sender);
                 if(referrer != address(0)){
                     actualPaid = actualPaid.sub(rebate);
-                    oscarShare.safeTransfer(referrer, rebate);
+                    oscarCash.safeTransfer(referrer, rebate);
                     emit ReferralRewardPaid(msg.sender, referrer, rebate);
                 }
             }
 
-            oscarShare.safeTransfer(msg.sender, actualPaid);
+            oscarCash.safeTransfer(msg.sender, actualPaid);
             emit RewardPaid(msg.sender, actualPaid);
         }
     }
 
-    function notifyRewardAmount(uint256 reward)
-        external
-        override
-        onlyRewardDistribution
-        updateReward(address(0))
+    function notifyRewardAmount(uint256 reward) 
+        external 
+        override 
+        onlyRewardDistribution 
+        updateReward(address(0)) 
     {
         if (block.timestamp > starttime) {
             if (block.timestamp >= periodFinish) {

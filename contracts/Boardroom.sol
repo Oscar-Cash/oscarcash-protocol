@@ -45,7 +45,7 @@ contract ShareWrapper {
     }
 }
 
-contract Boardroom is ShareWrapper, ContractGuard, Operator, IGasDiscount{
+contract Boardroom is ShareWrapper, ContractGuard, Operator{
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
@@ -149,21 +149,7 @@ contract Boardroom is ShareWrapper, ContractGuard, Operator, IGasDiscount{
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
-
-    /* ======== discount ==============*/
-    function stakeWithDiscount(uint256 amount, address gasSponsor, uint256 flag) 
-        external 
-        discountGas(gasSponsor, flag)
-    {
-        stakeInternal(amount);
-    }
-
-    function stake(uint256 amount) public override {
-        stakeInternal(amount);
-    }
-
-    function stakeInternal(uint256 amount)
-        internal
+    function stake(uint256 amount) public override 
         onlyOneBlock
         updateReward(msg.sender)
     {
@@ -172,20 +158,7 @@ contract Boardroom is ShareWrapper, ContractGuard, Operator, IGasDiscount{
         emit Staked(msg.sender, amount);
     }
 
-    /* ======== discount ==============*/
-    function withdrawWithDiscount(uint256 amount, address gasSponsor, uint256 flag) 
-        external 
-        discountGas(gasSponsor, flag)
-    {
-        withdrawInternal(amount);
-    }
-
-    function withdraw(uint256 amount) public override {
-       withdrawInternal(amount);
-    }
-
-    function withdrawInternal(uint256 amount)
-        internal
+    function withdraw(uint256 amount) public override 
         onlyOneBlock
         directorExists
         updateReward(msg.sender)
@@ -194,39 +167,13 @@ contract Boardroom is ShareWrapper, ContractGuard, Operator, IGasDiscount{
         super.withdraw(amount);
         emit Withdrawn(msg.sender, amount);
     }
-    /* ======== discount ==============*/
-    function exitWithDiscount(address gasSponsor, uint256 flag) 
-        external
-        discountGas(gasSponsor, flag) 
-    {
-        exitInternal();
-    }
 
     function exit() public {
-        exitInternal();
-    }
-
-    function exitInternal() internal {
         withdraw(balanceOf(msg.sender));
         claimReward();
     }
 
-     /* ======== discount ==============*/
-    function claimRewardWithDiscount(address gasSponsor, uint256 flag) 
-        external 
-        discountGas(gasSponsor, flag)
-    {
-        claimRewardInternal();
-    }
-    
     function claimReward() public updateReward(msg.sender) {
-        claimRewardInternal();
-    }
-    
-    function claimRewardInternal() 
-        internal 
-        updateReward(msg.sender) 
-    {
         uint256 reward = directors[msg.sender].rewardEarned;
         if (reward > 0) {
             directors[msg.sender].rewardEarned = 0;

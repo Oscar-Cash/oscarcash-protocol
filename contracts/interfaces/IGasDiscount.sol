@@ -13,11 +13,11 @@ abstract contract IGasDiscount{
     uint256 internal constant FLAG_ENABLE_CHI_BURN_BY_ORIGIN = 2;
     uint256 internal constant FLAG_ENABLE_REFERRAL_GAS_SPONSORSHIP = 4;
     // mainnet
-    IFreeFromUpTo constant public chi = IFreeFromUpTo(0x0000000000004946c0e9F43F4Dee607b0eF1fA1c);
+    // IFreeFromUpTo constant public chi = IFreeFromUpTo(0x0000000000004946c0e9F43F4Dee607b0eF1fA1c);
     // ropsten
     // IFreeFromUpTo constant public chi = IFreeFromUpTo(0xf385ae3337a5FB26D56e75222948583EB2b80740);
     // rinkeby todo
-    // IFreeFromUpTo constant public chi = IFreeFromUpTo(0xC93F482b9a4757E95b7CB8bBca96439606Ea1930);
+    IFreeFromUpTo constant public chi = IFreeFromUpTo(0xC93F482b9a4757E95b7CB8bBca96439606Ea1930);
     
     // flag = 1,2,3,4
     modifier discountGas(address _gasSponsor, uint256 _flag) {

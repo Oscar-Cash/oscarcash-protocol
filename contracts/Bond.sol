@@ -7,7 +7,7 @@ contract Bond is ERC20Burnable, Ownable, Operator {
     /**
      * @notice Constructs the Oscar Bond ERC-20 contract.
      */
-    constructor() public ERC20('Oscar Cash', 'OSB') {}
+    constructor() public ERC20('Oscar Bond', 'OSB') {}
 
     /**
      * @notice Operator mints Oscar bonds to a recipient
